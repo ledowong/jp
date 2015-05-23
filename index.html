@@ -1,0 +1,424 @@
+<html>
+<head>
+<title>五十音</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<script type="text/javascript" src="jquery-1.2.6.min.js"></script>
+<script type="text/javascript">
+
+//user define variable
+var controlWidth = 220;
+var pool = 30; //max number of box at the same time
+var maxLevel = 10;
+var boxFontSize = "24px";
+
+//preset variable
+var gameStatus = 0; //0: ready; 1: playing
+var gameLevel = 1;
+var selectedList = new Array(1,1,1,1,1);
+var matchingList = new Array();
+var poolArray = new Array();
+var bodySize = new Array(2);
+var current = new Array();
+var keyboardBuffer = "";
+var timeIDs = new Array();
+var cheating = 0;
+var bingoCount = -1;
+
+//matching list
+var list = new Array();
+list[0] = new Array(
+'あ:a', 'い:i', 'う:u', 'え:e', 'お:o',
+'か:ka','き:ki','く:ku','け:ke','こ:ko',
+'さ:sa','し:shi','す:su','せ:se','そ:so',
+'た:ta','ち:chi','つ:tsu','て:te','と:to',
+'な:na','に:ni','ぬ:nu','ね:ne','の:no',
+'は:ha','ひ:hi','ふ:fu','へ:he','ほ:ho',
+'ま:ma','み:mi','む:mu','め:me','も:mo',
+'や:ya','ゆ:yu','よ:yo',
+'ら:ra','り:ri','る:ru','れ:re','ろ:ro',
+'わ:wa','を:o',
+'ん:n');
+list[1] = new Array(
+'ア:a','イ:i','ウ:u','エ:e','オ:o',
+'カ:ka','キ:ki','ク:ku','ケ:ke','コ:ko',
+'サ:sa','シ:shi','ス:su','セ:se','ソ:so',
+'タ:ta','チ:chi','ツ:tsu','テ:te','ト:to',
+'ナ:na','ニ:ni','ヌ:nu','ネ:ne','ノ:no',
+'ハ:ha','ヒ:hi','フ:fu','ヘ:he','ホ:ho',
+'マ:ma','ミ:mi','ム:mu','メ:me','モ:mo',
+'ヤ:ya','ユ:yu','ヨ:yo',
+'ラ:ra','リ:ri','ル:ru','レ:re','ロ:ro',
+'ワ:wa','ヲ:o',
+'ン:n');
+list[2] = new Array(
+'が:ga', 'ぎ:gi', 'ぐ:gu', 'げ:ge', 'ご:go',
+'ざ:za', 'じ:ji', 'ず:zu', 'ぜ:ze', 'ぞ:zo',
+'だ:da', 'ぢ:ji', 'づ:zu', 'で:de', 'ど:do',
+'ば:ba', 'び:bi', 'ぶ:bu', 'べ:be', 'ぼ:bo',
+'ぱ:pa', 'ぴ:pi', 'ぷ:pu', 'ぺ:pe', 'ぽ:po'
+);
+list[3] = new Array(
+'ガ:ga', 'ギ:gi', 'グ:gu', 'ゲ:ge', 'ゴ:go',
+'ザ:za', 'ジ:ji', 'ズ:zu', 'ゼ:ze', 'ゾ:zo',
+'ダ:da', 'ヂ:ji', 'ヅ:zu', 'デ:de', 'ド:do',
+'バ:ba', 'ビ:bi', 'ブ:bu', 'ベ:be', 'ボ:bo',
+'パ:pa', 'ピ:pi', 'プ:pu', 'ペ:pe', 'ポ:po'
+);
+list[4] = new Array(
+'あア:a', 'いイ:i', 'うウ:u', 'えエ:e', 'おオ:o',
+'かカ:ka','きキ:ki','くク:ku','けケ:ke','こコ:ko',
+'さサ:sa','しシ:shi','すス:su','せセ:se','そソ:so',
+'たタ:ta','ちチ:chi','つツ:tsu','てテ:te','とト:to',
+'なナ:na','にニ:ni','ぬヌ:nu','ねネ:ne','のノ:no',
+'はハ:ha','ひヒ:hi','ふフ:fu','へヘ:he','ほホ:ho',
+'まマ:ma','みミ:mi','むム:mu','めメ:me','もモ:mo',
+'やヤ:ya','ゆユ:yu','よヨ:yo',
+'らラ:ra','りリ:ri','るル:ru','れレ:re','ろロ:ro',
+'わワ:wa','をヲ:o',
+'んン:n');
+
+$(document).ready(function(){
+	//set control width and selected list
+	$("#control").css("width", controlWidth);
+	$("#message").hide();
+	$("#gameStatus").css("color", "darkred");
+
+	//keypress binding
+	$(document).keydown(function(e){
+		if (e.which == 8) {
+			e.preventDefault();
+		}
+	}).bind("keypress", function(e){
+		if ((e.which == 32 || (65 <= e.which && e.which <= 65 + 25) || (97 <= e.which && e.which <= 97 + 25)) && gameStatus == 1) {
+			//keyboard A-Za-z_
+			if (e.which != 32) {
+				keyboardBuffer += String.fromCharCode(e.which);
+			} else if (keyboardBuffer != "") {
+				bingo(keyboardBuffer);
+				keyboardBuffer = "";
+			}
+		} else if (((e.which >= 49 && e.which <= 53) || e.which >= 91 && e.which <= 93) && gameStatus == 0) {
+			//keyboard 1 2 3 4 5 , .
+			switch (e.which) {
+				case 91:
+					if (gameLevel > 1) {
+						gameLevel --;
+						$("#level").text(gameLevel);
+					}
+					break;
+				case 93:
+					if (gameLevel < maxLevel) {
+						gameLevel ++;
+						$("#level").text(gameLevel);
+					}
+					break;
+				case 92:
+					cheat();
+					break;
+				case 49:
+					if (selectedList[0] == 1) {
+						selectedList[0] = 0;
+						$("#list0").css("text-decoration", "line-through");
+					} else {
+						selectedList[0] = 1;
+						$("#list0").css("text-decoration", "");
+					}
+					break;
+				case 50:
+					if (selectedList[1] == 1) {
+						selectedList[1] = 0;
+						$("#list1").css("text-decoration", "line-through");
+					} else {
+						selectedList[1] = 1;
+						$("#list1").css("text-decoration", "");
+					}
+					break;
+				case 51:
+					if (selectedList[2] == 1) {
+						selectedList[2] = 0;
+						$("#list2").css("text-decoration", "line-through");
+					} else {
+						selectedList[2] = 1;
+						$("#list2").css("text-decoration", "");
+					}
+					break;
+				case 52:
+					if (selectedList[3] == 1) {
+						selectedList[3] = 0;
+						$("#list3").css("text-decoration", "line-through");
+					} else {
+						selectedList[3] = 1;
+						$("#list3").css("text-decoration", "");
+					}
+					break;
+				case 53:
+					if (selectedList[4] == 1) {
+						selectedList[4] = 0;
+						$("#list4").css("text-decoration", "line-through");
+					} else {
+						selectedList[4] = 1;
+						$("#list4").css("text-decoration", "");
+					}
+					break;
+			}
+		} else if (e.which == 13) {
+			//enter key, start/stop the game
+			if (gameStatus == 0) {
+				startGame();
+			} else {
+				gameOver();
+			}
+		}
+	});
+
+
+	//check #body's width and height
+	var checkBodySize = function() {
+		bodySize[0] = $("#body").width();
+		bodySize[1] = $("#body").height();
+	}
+	$(window).bind("resize", checkBodySize);
+	$(window).bind("load", checkBodySize);
+
+	//init the box
+	for (var i=0; i<pool; i++) {
+		$("<div></div>")
+		.attr("id", "box"+i)
+		.css("position", "absolute")
+		.css("left", "0")
+		.css("top", "0")
+		.css("padding", "2px")
+		.css("text-align", "center")
+		.css("font-weight", "bold")
+		.css("font-size", boxFontSize)
+		.appendTo("body")
+		.hide();
+		poolArray.push(i);
+	}
+
+});
+
+//cheating
+function cheat() {
+	if (cheating == 0) {
+		cheating = 1;
+		$("#cheat").text("On");
+	} else {
+		cheating = 0;
+		$("#cheat").text("Off");
+	}
+}
+
+//bingo checking
+function bingo(string) {
+	var position = $.inArray(string, current);
+	if (position != -1) {
+		//remove it from the current array
+		var tmp = current.splice(position, 2);
+		//play the sound!
+		playSound(tmp[0]);
+		//put the ID back to the pool
+		poolArray.push(tmp[1]);
+		bingoCounting();
+	}
+}
+
+function playSound(sound) {
+	flash().SetVariable('url', 'sound/'+sound+'.mp3');
+}
+
+function flash() {
+	 if (jQuery.browser.safari) {
+        return window['mp3player_embed'];
+    } else {
+        return document['mp3player_object'];
+    }
+
+}
+
+//alert message
+function message(msg) {
+	$("#message")
+	.text(msg)
+	.css("top", 200)
+	.css("left", ((bodySize[0]+controlWidth)/2)-($("#message").width()/2))
+	.show()
+	.animate({opacity: 1.0}, 3000)
+	.fadeOut("slow");
+}
+
+function bingoCounting() {
+	bingoCount++;
+	jQuery("#bingoCounter").text(bingoCount);
+}
+
+//reset and start the game
+function startGame() {
+	current = Array();
+	matchingList = Array();
+	bingoCount = -1;
+	bingoCounting();
+	for (var i=0; i<selectedList.length; i++) {
+		if (selectedList[i] == 1) {
+			matchingList = matchingList.concat(list[i]);
+		}
+	}
+	if (matchingList.length == 0) {
+		message("Please select at least one Group.");
+	} else {
+		gameStatus = 1;
+		$("#gameStatus").text("Playing!").css("color", "green");
+		$("#body").css("background", "white");
+		poolArray = Array();
+		for (var i=0; i<pool; i++) {
+			$("#box"+i).css("top", "0").hide();
+			poolArray.push(i);
+		}
+		runBox();
+	}
+}
+
+//gameover
+function gameOver() {
+	gameStatus = 0;
+	$("#gameStatus").text("Ready").css("color", "darkred");
+	$("#body").css("background", "pink");
+	message("Game Over!");
+	$.each(timeIDs, function() {
+		clearTimeout(this);
+	});
+	timeIDs = Array();
+}
+
+//generate the box
+function runBox() {
+	if (gameStatus == 1) {
+		if (poolArray.length > 0) {
+			//get a number from the pool
+			var id = poolArray.shift();
+			//random a word/input method
+			var word = matchingList[Math.floor(Math.random()*matchingList.length)].split(":");
+			//put the input method and the layer ID to the current array
+			current.push(word[1], id);
+			//put the text in to the box
+			if (cheating == 1) {
+				var showText = word[0]+"("+word[1]+")";
+			} else {
+				var showText = word[0];
+			}
+			$("#box"+id)
+			.text(showText)
+			.css("background", "#CCCCCC")
+			.css("left", Math.floor(Math.random()*(bodySize[0]-$("#box"+id).width())+controlWidth))
+			.css("opacity", "1")
+			.show();
+			//the box start dropping
+			timeIDs.push(setTimeout("dropBox('"+id+"', 0)", 100));
+		}
+		//run itself again
+		//new box speed
+		timeIDs.push(setTimeout("runBox()", 3000/gameLevel));
+	}
+}
+
+//the box dropping animation
+function dropBox(id, dropTo) {
+	if (gameStatus == 1) {
+		if (dropTo<bodySize[1]-$("#box"+id).height()) {
+			if ($.inArray(parseInt(id), current) == -1) {//bingo?
+				$("#box"+id)
+				.css("background", "red")
+				.animate({top: "0", opacity: "0"}, 1000)
+				.fadeOut();
+			} else {
+				$("#box"+id).css("top", dropTo);
+				//dropping speed
+				dropTo += gameLevel;
+				timeIDs.push(setTimeout("dropBox('"+id+"', "+dropTo+")", 100));
+			}
+		} else {
+			gameOver();
+		}
+	}
+}
+
+</script>
+<style type="text/css">
+#table {
+	border-collapse: collapse;
+	width: 100%;
+	height: 100%;
+}
+#control {
+	background: gray;
+	vertical-align: top;
+}
+#message {
+	z-index: 10;
+	position: absolute;
+	text-align: center;
+	font-weight: bold;
+	margin: 1em 0;
+	padding: .5em;
+	background: #ffa;
+	border: 1px solid #a00;
+	color: #a00;
+}
+.tips {
+	font-size: 12px;
+}
+#gameStatus {
+	font-size: 24px;
+	font-weight: bold;
+}
+.mp3player {
+	bottom: 0;
+	left: 0;
+	position: absolute;
+}
+#bingoCounter {
+	position: absolute;
+	top: 0;
+	right: 0;
+}
+</style>
+</head>
+<body topmargin="0" leftmargin="0" marginheight="0" marginwidth="0">
+<table id="table">
+<tr>
+<td id="control">
+	<div id="gameStatus">Ready</div>
+	<div class="tips">#keyboard "enter" to start/stop</div>
+	<br/>
+	<b>Level:</b> <span id="level">1</span>
+	<div class="tips">#keyboard "[" & "]" to change</div>
+	<br/>
+	<b>Groups:</b>
+	<div id="list0">1. 平假名 - 清音</div>
+	<div id="list1">2. 片假名 - 清音</div>
+	<div id="list2">3. 平假名 - 濁音/半濁音</div>
+	<div id="list3">4. 片假名 - 濁音/半濁音</div>
+	<div id="list4">5. 假名 - 清音</div>
+	<div class="tips">#keyboard "1-4" to (un)select</div>
+	<br/>
+	<b>Cheat:</b> <span id="cheat">Off</span>
+	<div class="tips">#keyboard "\" to switch</div>
+	<br/>
+	<b>How to play:</b>
+	<br/>
+	For example, when あ appear, type "a" + space bar in keyboard.
+</td>
+<td id="body"></td>
+</tr>
+</table>
+<div id="message"></div>
+<div id="bingoCounter"></div>
+<div class="mp3player"><object id="mp3player_object" type="application/x-shockwave-flash" data="player.swf" width="220" height="30" style="vertical-align:  bottom;">
+<!-- MP3 Flash player. Credits, license, contact & examples: http://pyg.keonox.com/flashmp3player/  -->
+<param name="type" value="application/x-shockwave-flash" />
+<param name="codebase" value="http://download.macromedia.com/pub/shockwave/cabs/flash/swflash.cab#version=6,0,40,0" />
+<param name="movie" value="player.swf" />
+<embed name="mp3player_embed" src="player.swf" type="application/x-shockwave-flash">
+</object></div>
+</body>
+</html>
